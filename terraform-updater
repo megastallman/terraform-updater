@@ -1,0 +1,70 @@
+#!/bin/bash
+
+TF_INSTALLATION_DIR="$HOME/.terraform"
+BASHRC="$HOME/.bashrc"
+
+SHA256SUMS_LINK=$(curl --silent https://www.terraform.io/downloads.html | grep "SHA256SUMS" | grep -v SHA256SUMS.sig | cut -d '"' -f2)
+
+# Can be extended if needed
+TF_OS=$(uname)
+if [ $TF_OS != "Linux" ]; then
+    echo "$(tput setaf 1)At the moment we support Linux only$(tput sgr 0)"
+    exit 1
+fi
+
+# Can be extended if needed
+TF_PLATFORM=$(uname -p)
+if [ $TF_PLATFORM == "x86_64" ]; then
+    TF_ARCH="amd64"
+fi
+
+if [ $TF_ARCH != "amd64" ]; then
+    echo "$(tput setaf 1)At the moment we support x86_64 only$(tput sgr 0)"
+    exit 1
+fi
+
+SHA256SUMS_TEXT=$(curl --silent "$SHA256SUMS_LINK" | grep -i "$TF_OS" | grep -i "$TF_ARCH")
+
+SHA256SUM=$(echo $SHA256SUMS_TEXT | cut -d' ' -f1)
+TF_FILENAME=$(echo $SHA256SUMS_TEXT | cut -d' ' -f2)
+TF_RELEASE=$(echo $TF_FILENAME | cut -d'_' -f2)
+TF_DOWN_LINK="https://releases.hashicorp.com/terraform/$TF_RELEASE/$TF_FILENAME"
+
+if [ ! -d "$TF_INSTALLATION_DIR" ]; then
+    echo "$(tput setaf 2)Creating the $TF_INSTALLATION_DIR directory$(tput sgr 0)"
+    mkdir "$TF_INSTALLATION_DIR"
+fi
+
+SCRIPTPATH=$(readlink -f $0)
+if [ "$(dirname $SCRIPTPATH)" != "$TF_INSTALLATION_DIR" ]; then
+    echo "$(tput setaf 2)Copying that script to $TF_INSTALLATION_DIR $(tput sgr 0)"
+    cp -f "$PWD/terraform-updater" "$TF_INSTALLATION_DIR"
+    chmod +x "$TF_INSTALLATION_DIR/terraform-updater"
+fi
+
+if [ ! "$(grep '# Added by the terraform-updater script' .bashrc)" ]; then
+    echo "$(tput setaf 2)Extending the \$PATH variable $(tput sgr 0)"
+    echo "
+# Added by the terraform-updater script
+PATH=$TF_INSTALLATION_DIR:$PATH
+" >> $BASHRC
+fi
+
+if [ ! -f "$TF_INSTALLATION_DIR/terraform" ]; then
+    echo "$(tput setaf 2)Terraform is not yet installed. $(tput sgr 0)"
+    CURRENT_TF_VERSION=""
+else
+    CURRENT_TF_VERSION=$($TF_INSTALLATION_DIR/terraform version | grep Terraform | cut -d 'v' -f2)
+    echo "$(tput setaf 2)Terraform's current version is $CURRENT_TF_VERSION $(tput sgr 0)"
+fi
+
+if [ "$TF_RELEASE" != "$CURRENT_TF_VERSION" ]; then
+    echo "$(tput setaf 2)Updating Terraform. Please wait... $(tput sgr 0)"
+    curl $TF_DOWN_LINK > $TF_INSTALLATION_DIR/terraform.zip
+    unzip $TF_INSTALLATION_DIR/terraform.zip -d $TF_INSTALLATION_DIR
+    rm $TF_INSTALLATION_DIR/terraform.zip 
+    chmod +x $TF_INSTALLATION_DIR/terraform
+else
+    echo "$(tput setaf 2)It's up to date, nothing to do.$(tput sgr 0)"
+fi
+
