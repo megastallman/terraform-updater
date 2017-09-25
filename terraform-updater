@@ -38,11 +38,11 @@ fi
 SCRIPTPATH=$(readlink -f $0)
 if [ "$(dirname $SCRIPTPATH)" != "$TF_INSTALLATION_DIR" ]; then
     echo "$(tput setaf 2)Copying that script to $TF_INSTALLATION_DIR $(tput sgr 0)"
-    cp -f "$PWD/terraform-updater" "$TF_INSTALLATION_DIR"
+    cp -f "$(readlink -f "$0")" "$TF_INSTALLATION_DIR"
     chmod +x "$TF_INSTALLATION_DIR/terraform-updater"
 fi
 
-if [ ! "$(grep '# Added by the terraform-updater script' .bashrc)" ]; then
+if [ ! "$(grep '# Added by the terraform-updater script' $BASHRC)" ]; then
     echo "$(tput setaf 2)Extending the \$PATH variable $(tput sgr 0)"
     echo "
 # Added by the terraform-updater script
@@ -61,6 +61,12 @@ fi
 if [ "$TF_RELEASE" != "$CURRENT_TF_VERSION" ]; then
     echo "$(tput setaf 2)Updating Terraform. Please wait... $(tput sgr 0)"
     curl $TF_DOWN_LINK > $TF_INSTALLATION_DIR/terraform.zip
+    ZIP_SHA256SUM="$(sha256sum $TF_INSTALLATION_DIR/terraform.zip | cut -d' ' -f1)"
+    if [ "$ZIP_SHA256SUM" != "$SHA256SUM" ]; then
+        echo "$(tput setaf 1)Terraform zipfile is corrupted, removing it. Please run the \"terraform-updater\" again $(tput sgr 0)"
+        rm -f $TF_INSTALLATION_DIR/terraform.zip
+        exit 1
+    fi
     unzip $TF_INSTALLATION_DIR/terraform.zip -d $TF_INSTALLATION_DIR
     rm $TF_INSTALLATION_DIR/terraform.zip 
     chmod +x $TF_INSTALLATION_DIR/terraform
